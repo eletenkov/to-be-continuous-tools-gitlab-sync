@@ -1,0 +1,51 @@
+include:
+ - project: 'to-be-continuous/bash'
+   ref: '1.0.0'
+   file: '/templates/gitlab-ci-bash.yml'
+
+variables:
+  BASH_SHELLCHECK_FILES: "*.sh"
+
+stages:
+  - build
+  - test
+
+sync-tbc:
+  image:
+    name: "dwdraju/alpine-curl-jq:latest"
+    entrypoint: [""]
+  stage: build
+  variables:
+    # exclude samples group from sync
+    EXCLUDE: samples,custom
+  before_script:
+    - |
+      function install_ca_certs() {
+        certs=$1
+        if [[ -z "$certs" ]]
+        then
+          return
+        fi
+        if echo "$certs" >> /etc/ssl/certs/ca-certificates.crt
+        then
+          echo -e "CA certificates imported in \\e[33;1m/etc/ssl/certs/ca-certificates.crt\\e[0m"
+        fi
+        if echo "$certs" >> /etc/ssl/cert.pem
+        then
+          echo -e "CA certificates imported in \\e[33;1m/etc/ssl/cert.pem\\e[0m"
+        fi
+      }
+    - apk update
+    - apk upgrade
+    - apk add --no-cache git
+    - install_ca_certs "${CUSTOM_CA_CERTS:-$DEFAULT_CA_CERTS}"
+  script:
+    - ./gitlab-sync.sh
+  rules:
+    # disable on gitlab.com
+    - if: '$CI_SERVER_HOST == "gitlab.com"'
+      when: never
+    # allow manual source
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    # allow scheduled source
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
