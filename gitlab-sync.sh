@@ -107,16 +107,19 @@ function maybe_create_group() {
 # $2: destination parent group ID (number)
 function sync_project() {
   local src_project_json=$1
-  project_full_path=$(echo "$src_project_json" | jq -r '.path_with_namespace')
+  src_project_full_path=$(echo "$src_project_json" | jq -r '.path_with_namespace')
   local dest_parent_id=$2
-  project_id=${project_full_path//\//%2f}
-  log_info "Synchronizing project \\e[33;1m${project_full_path}\\e[0m (parent group ID \\e[33;1m${dest_parent_id}\\e[0m)"
+  src_project_id=${src_project_full_path//\//%2f}
+  local dest_group_full_path=$3
+  dest_project_full_path=${project_full_path/$SRC_SYNC_PATH/$DEST_SYNC_PATH}
+  dest_project_id=${dest_project_full_path//\//%2f}
+  log_info "Synchronizing project \\e[33;1m${src_project_full_path}\\e[0m (parent group ID \\e[33;1m${dest_parent_id}\\e[0m) to \\e[33;1m${dest_project_full_path}"
 
   # 1: sync project
   if [[ "$DEST_GITLAB_API" ]]
   then
     dest_visibility=$(adjust_visibility "$(echo "$src_project_json" | jq -r .visibility)")
-    dest_project_status=$(curl -s -o /dev/null -I -w "%{http_code}" -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" "$DEST_GITLAB_API/projects/$project_id")
+    dest_project_status=$(curl -s -o /dev/null -I -w "%{http_code}" -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" "$DEST_GITLAB_API/projects/$dest_project_id")
     if [[ "$dest_project_status" == 404* ]]
     then
       # dest project does not exist: create (disable MR and issues as they are cloned projects)
@@ -135,14 +138,14 @@ function sync_project() {
     then
       # dest group exists: sync
       log_info "... destination project found: synchronize"
-      dest_project_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X PUT "$DEST_GITLAB_API/projects/$project_id" \
+      dest_project_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X PUT "$DEST_GITLAB_API/projects/$dest_project_id" \
         --data "{
           \"name\": $(echo "$src_project_json" | jq .name), 
           \"visibility\": \"$dest_visibility\", 
           \"description\": $(echo "$src_project_json" | jq .description)
         }")
         # \"visibility\": \"$(echo "$src_project_json" | jq -r .visibility)\",
-      dest_latest_commit=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" "$DEST_GITLAB_API/projects/$project_id/repository/commits?ref_name=master&per_page=1" | jq -r '.[0].id')
+      dest_latest_commit=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" "$DEST_GITLAB_API/projects/$dest_project_id/repository/commits?ref_name=master&per_page=1" | jq -r '.[0].id')
     else
       # another error: abort
       fail "... unexpected error: $dest_project_status"
@@ -157,7 +160,7 @@ function sync_project() {
       log_info "... update avatar image ($src_avatar_url)"
       avatar_filename=/tmp/$(basename "$src_avatar_url")
       curl -sSfL --output "$avatar_filename" "$src_avatar_url"
-      dest_project_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" --form "avatar=@$avatar_filename" -X PUT "$DEST_GITLAB_API/projects/$project_id")
+      dest_project_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" --form "avatar=@$avatar_filename" -X PUT "$DEST_GITLAB_API/projects/$dest_project_id")
     fi
   fi
 
@@ -165,18 +168,18 @@ function sync_project() {
   if [[ "$dest_project_status" == 200* ]]
   then
     log_info "... unprotect 'master' branch (allow failure)"
-    curl -sS -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -X DELETE "$DEST_GITLAB_API/projects/$project_id/protected_branches/master" > /dev/null
+    curl -sS -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -X DELETE "$DEST_GITLAB_API/projects/$dest_project_id/protected_branches/master" > /dev/null
   fi
 
   # 2: sync Git repository
   if [[ "$DEST_GITLAB_API" ]]
   then
-    src_latest_commit=$(curl -sSf -H "${SRC_TOKEN+PRIVATE-TOKEN: $SRC_TOKEN}" "$SRC_GITLAB_API/projects/$project_id/repository/commits?ref_name=master&per_page=1" | jq -r '.[0].id')
+    src_latest_commit=$(curl -sSf -H "${SRC_TOKEN+PRIVATE-TOKEN: $SRC_TOKEN}" "$SRC_GITLAB_API/projects/$src_project_id/repository/commits?ref_name=master&per_page=1" | jq -r '.[0].id')
     if [[ "$src_latest_commit" == "$dest_latest_commit" ]]
     then
       log_info "... source and destination repositories are on same latest commit ($src_latest_commit): skip sync"
     else
-      repo_name="$project_id"
+      repo_name="$src_project_id"
       rm -rf "$repo_name"
 
       src_repo_url=$(echo "$src_project_json" | jq -r .http_url_to_repo)
@@ -205,26 +208,30 @@ function sync_project() {
   if [[ "$dest_project_status" == 404* ]]
   then
     log_info "... unprotect 'master' branch (allow failure)"
-    curl -sS -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -X DELETE "$DEST_GITLAB_API/projects/$project_id/protected_branches/master" > /dev/null
+    curl -sS -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -X DELETE "$DEST_GITLAB_API/projects/$dest_project_id/protected_branches/master" > /dev/null
   fi
 }
 
 # Synchronizes recursively a GitLab group
-# $1: group full path
+# $1: source group full path
 # $2: destination parent group ID (number)
+# $3: exclude projets/subgroup
+# $4: destination group full path
 function sync_group() {
-  local group_full_path=$1
+  local src_group_full_path=$1
   local dest_parent_id=$2
-  local group_id=${group_full_path//\//%2f}
+  local src_group_id=${src_group_full_path//\//%2f}
   local exclude=$3
-  log_info "Synchronizing group \\e[33;1m${group_full_path}\\e[0m (parent group ID \\e[33;1m${dest_parent_id}\\e[0m)"
-  src_group_json=$(curl -sSf -H "${SRC_TOKEN+PRIVATE-TOKEN: $SRC_TOKEN}" "$SRC_GITLAB_API/groups/$group_id")
+  local dest_group_full_path=$4
+  local dest_group_name=${dest_group_full_path//\//%2f}
+  log_info "Synchronizing group \\e[33;1m${src_group_full_path}\\e[0m (parent group ID \\e[33;1m${dest_parent_id}\\e[0m)"
+  src_group_json=$(curl -sSf -H "${SRC_TOKEN+PRIVATE-TOKEN: $SRC_TOKEN}" "$SRC_GITLAB_API/groups/$src_group_id")
 
   # 1: sync group itself
   if [[ "$DEST_GITLAB_API" ]]
   then
     dest_visibility=$(adjust_visibility "$(echo "$src_group_json" | jq -r .visibility)")
-    dest_group_status=$(curl -s -o /dev/null -I -w "%{http_code}" -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" "$DEST_GITLAB_API/groups/$group_id")
+    dest_group_status=$(curl -s -o /dev/null -I -w "%{http_code}" -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" "$DEST_GITLAB_API/groups/$dest_group_name")
     if [[ "$dest_group_status" == 404* ]]
     then
       # dest group does not exist: create
@@ -241,7 +248,7 @@ function sync_group() {
     then
       # dest group exists: sync
       log_info "... destination group found: synchronize"
-      dest_group_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X PUT "$DEST_GITLAB_API/groups/$group_id" \
+      dest_group_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X PUT "$DEST_GITLAB_API/groups/$dest_group_name" \
         --data "{
           \"name\": $(echo "$src_group_json" | jq .name), 
           \"visibility\": \"$dest_visibility\", 
@@ -264,7 +271,7 @@ function sync_group() {
       avatar_filename=/tmp/$(basename "$src_avatar_url")
       if curl -sSfL --output "$avatar_filename" "$src_avatar_url"
       then
-        dest_group_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" --form "avatar=@$avatar_filename" -X PUT "$DEST_GITLAB_API/groups/$group_id")
+        dest_group_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" --form "avatar=@$avatar_filename" -X PUT "$DEST_GITLAB_API/groups/$dest_group_id")
       else
         log_warn "... failed downloading avatar image ($src_avatar_url)"
       fi
@@ -276,12 +283,12 @@ function sync_group() {
   do
     project_json=$(echo "$project_b64" | base64 -d)
     project_full_path=$(echo "$project_json" | jq -r '.path_with_namespace')
-    project_rel_path=${project_full_path#$SYNC_PATH/}
+    project_rel_path=${project_full_path#$SRC_SYNC_PATH/}
     if [[ ",$exclude," == *,$project_rel_path,* ]]
     then
       log_info "Project \\e[33;1m${project_full_path}\\e[0m matches excludes (\\e[33;1m${exclude}\\e[0m): skip"
     else
-      sync_project "$project_json" "$dest_group_id" 
+      sync_project "$project_json" "$dest_group_id" "$dest_group_full_path"
     fi
   done
 
@@ -289,7 +296,7 @@ function sync_group() {
   src_subgroups_json=$(curl -sSf -H "${SRC_TOKEN+PRIVATE-TOKEN: $SRC_TOKEN}" "$SRC_GITLAB_API/groups/$group_id/subgroups")
   for full_path in $(echo "$src_subgroups_json" | jq -r '.[].full_path')
   do
-    group_rel_path=${full_path#$SYNC_PATH/}
+    group_rel_path=${full_path#$SRC_SYNC_PATH/}
     if [[ ",$exclude," == *,$group_rel_path,* ]]
     then
       log_info "Group \\e[33;1m${full_path}\\e[0m matches excludes (\\e[33;1m${exclude}\\e[0m): skip"
@@ -306,7 +313,8 @@ DEST_GITLAB_API=${DEST_GITLAB_API:-$CI_API_V4_URL}
 # GitLab destination token defaults to $GITLAB_TOKEN
 DEST_TOKEN=${DEST_TOKEN:-$GITLAB_TOKEN}
 # root group path to synchronize
-SYNC_PATH=${SYNC_PATH:-to-be-continuous}
+SRC_SYNC_PATH=${SRC_SYNC_PATH:-to-be-continuous}
+DEST_SYNC_PATH=${DEST_SYNC_PATH:-to-be-continuous}
 MAX_VISIBILITY=${MAX_VISIBILITY:-public}
 
 # parse arguments
@@ -325,7 +333,7 @@ case ${key} in
     exit 0
     ;;
     --sync-path)
-    SYNC_PATH="$2"
+    SRC_SYNC_PATH="$2"
     shift # past argument
     shift # past value
     ;;
@@ -376,12 +384,13 @@ then
 fi
 
 log_info "Synchronizing GitLab group"
-log_info "- group     (--sync-path)      : \\e[33;1m${SYNC_PATH}\\e[0m"
-log_info "- from      (--src-api)        : \\e[33;1m${SRC_GITLAB_API}\\e[0m"
-log_info "- to        (--dest-api)       : \\e[33;1m${DEST_GITLAB_API:-none (dry run)}\\e[0m"
-log_info "- max visi. (--max-visibility) : \\e[33;1m${MAX_VISIBILITY}\\e[0m"
-log_info "- exclude   (--exclude)        : \\e[33;1m${EXCLUDE:-none}\\e[0m"
+log_info "- src group   (--src-sync-path)  : \\e[33;1m${SRC_SYNC_PATH}\\e[0m"
+log_info "- dest group  (--dest-sync-path) : \\e[33;1m${DEST_SYNC_PATH}\\e[0m"
+log_info "- from        (--src-api)        : \\e[33;1m${SRC_GITLAB_API}\\e[0m"
+log_info "- to          (--dest-api)       : \\e[33;1m${DEST_GITLAB_API:-none (dry run)}\\e[0m"
+log_info "- max visi.   (--max-visibility) : \\e[33;1m${MAX_VISIBILITY}\\e[0m"
+log_info "- exclude     (--exclude)        : \\e[33;1m${EXCLUDE:-none}\\e[0m"
 
 init_git
 # shellcheck disable=SC2046
-sync_group "$SYNC_PATH" $(maybe_create_group $(dirname "$SYNC_PATH")) "$EXCLUDE"
+sync_group "$SRC_SYNC_PATH" $(maybe_create_group $(dirname "$SRC_SYNC_PATH")) "$EXCLUDE" "$DEST_SYNC_PATH"
