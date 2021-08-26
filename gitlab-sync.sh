@@ -236,24 +236,44 @@ function sync_group() {
     then
       # dest group does not exist: create
       log_info "... destination group not found: create with visibility \\e[33;1m${dest_visibility}\\e[0m"
-      dest_group_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X POST "$DEST_GITLAB_API/groups" \
-        --data "{
-          \"path\": $(echo "$src_group_json" | jq .path), 
-          \"name\": $(echo "$src_group_json" | jq .name), 
-          \"visibility\": \"$dest_visibility\", 
-          \"description\": $(echo "$src_group_json" | jq .description), 
-          \"parent_id\": $dest_parent_id
-        }")
+      if [[ "${GROUP_DESCRIPTION_DISABLED}" == "true" ]]
+      then
+        dest_group_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X POST "$DEST_GITLAB_API/groups" \
+          --data "{
+            \"path\": $(echo "$src_group_json" | jq .path), 
+            \"name\": $(echo "$src_group_json" | jq .name), 
+            \"visibility\": \"$dest_visibility\", 
+            \"parent_id\": $dest_parent_id
+          }")
+        else
+          dest_group_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X POST "$DEST_GITLAB_API/groups" \
+          --data "{
+            \"path\": $(echo "$src_group_json" | jq .path), 
+            \"name\": $(echo "$src_group_json" | jq .name), 
+            \"visibility\": \"$dest_visibility\", 
+            \"description\": $(echo "$src_group_json" | jq .description), 
+            \"parent_id\": $dest_parent_id
+          }")
+        fi
     elif [[ "$dest_group_status" == 200* ]]
     then
       # dest group exists: sync
       log_info "... destination group found: synchronize"
-      dest_group_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X PUT "$DEST_GITLAB_API/groups/$dest_group_name" \
-        --data "{
-          \"name\": $(echo "$src_group_json" | jq .name), 
-          \"visibility\": \"$dest_visibility\", 
-          \"description\": $(echo "$src_group_json" | jq .description)
-        }")
+      if [[ "${GROUP_DESCRIPTION_DISABLED}" == "true" ]]
+      then
+        dest_group_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X PUT "$DEST_GITLAB_API/groups/$dest_group_name" \
+          --data "{
+            \"name\": $(echo "$src_group_json" | jq .name), 
+            \"visibility\": \"$dest_visibility\"
+          }")
+      else
+        dest_group_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X PUT "$DEST_GITLAB_API/groups/$dest_group_name" \
+          --data "{
+            \"name\": $(echo "$src_group_json" | jq .name), 
+            \"visibility\": \"$dest_visibility\", 
+            \"description\": $(echo "$src_group_json" | jq .description)
+          }")      
+      fi
     else
       # another error: abort
       fail "... unexpected error: $dest_group_status"
@@ -316,6 +336,7 @@ DEST_TOKEN=${DEST_TOKEN:-$GITLAB_TOKEN}
 SRC_SYNC_PATH=${SRC_SYNC_PATH:-to-be-continuous}
 DEST_SYNC_PATH=${DEST_SYNC_PATH:-to-be-continuous}
 MAX_VISIBILITY=${MAX_VISIBILITY:-public}
+GROUP_DESCRIPTION_DISABLED=${GROUP_DESCRIPTION_DISABLED:-none}
 
 # parse arguments
 POSITIONAL=()
@@ -330,6 +351,7 @@ case ${key} in
     log_info "  --dest-api {GitLab destination API url} [--dest-token {GitLab destination token}]"
     log_info "  [--max-visibility {max visibility}]"
     log_info "  [--exclude {coma separated list of project/group path(s) to exclude}]"
+    log_info "  [--no-group-description {do not synchronise group description}]"
     exit 0
     ;;
     --sync-path)
@@ -367,6 +389,11 @@ case ${key} in
     shift # past argument
     shift # past value
     ;;
+    --no-group-description)
+    GROUP_DESCRIPTION_DISABLED="true"
+    shift # past argument
+    shift # past value
+    ;;
     *)    # unknown option
     POSITIONAL+=("$1") # save it in an array for later
     shift # past argument
@@ -390,6 +417,7 @@ log_info "- from        (--src-api)        : \\e[33;1m${SRC_GITLAB_API}\\e[0m"
 log_info "- to          (--dest-api)       : \\e[33;1m${DEST_GITLAB_API:-none (dry run)}\\e[0m"
 log_info "- max visi.   (--max-visibility) : \\e[33;1m${MAX_VISIBILITY}\\e[0m"
 log_info "- exclude     (--exclude)        : \\e[33;1m${EXCLUDE:-none}\\e[0m"
+log_info "- no-group-description     (--no-group-description)        : \\e[33;1m${GROUP_DESCRIPTION_DISABLED:-none}\\e[0m"
 
 init_git
 # shellcheck disable=SC2046
