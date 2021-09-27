@@ -138,12 +138,21 @@ function sync_project() {
     then
       # dest group exists: sync
       log_info "... destination project found: synchronize"
+      if [[ "${PROJECT_DESCRIPTION_DISABLED}" == "true" ]]
+      then
+        dest_project_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X PUT "$DEST_GITLAB_API/projects/$dest_project_id" \
+          --data "{
+            \"name\": $(echo "$src_project_json" | jq .name), 
+            \"visibility\": \"$dest_visibility\"
+          }")
+      else
       dest_project_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X PUT "$DEST_GITLAB_API/projects/$dest_project_id" \
         --data "{
           \"name\": $(echo "$src_project_json" | jq .name), 
           \"visibility\": \"$dest_visibility\", 
           \"description\": $(echo "$src_project_json" | jq .description)
         }")
+      fi
         # \"visibility\": \"$(echo "$src_project_json" | jq -r .visibility)\",
       dest_latest_commit=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" "$DEST_GITLAB_API/projects/$dest_project_id/repository/commits?ref_name=master&per_page=1" | jq -r '.[0].id')
     else
@@ -236,25 +245,14 @@ function sync_group() {
     then
       # dest group does not exist: create
       log_info "... destination group not found: create with visibility \\e[33;1m${dest_visibility}\\e[0m"
-      if [[ "${GROUP_DESCRIPTION_DISABLED}" == "true" ]]
-      then
         dest_group_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X POST "$DEST_GITLAB_API/groups" \
-          --data "{
-            \"path\": $(echo "$src_group_json" | jq .path), 
-            \"name\": $(echo "$src_group_json" | jq .name), 
-            \"visibility\": \"$dest_visibility\", 
-            \"parent_id\": $dest_parent_id
-          }")
-        else
-          dest_group_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X POST "$DEST_GITLAB_API/groups" \
-          --data "{
-            \"path\": $(echo "$src_group_json" | jq .path), 
-            \"name\": $(echo "$src_group_json" | jq .name), 
-            \"visibility\": \"$dest_visibility\", 
-            \"description\": $(echo "$src_group_json" | jq .description), 
-            \"parent_id\": $dest_parent_id
-          }")
-        fi
+        --data "{
+          \"path\": $(echo "$src_group_json" | jq .path), 
+          \"name\": $(echo "$src_group_json" | jq .name), 
+          \"visibility\": \"$dest_visibility\", 
+          \"description\": $(echo "$src_group_json" | jq .description), 
+          \"parent_id\": $dest_parent_id
+        }")
     elif [[ "$dest_group_status" == 200* ]]
     then
       # dest group exists: sync
@@ -337,6 +335,7 @@ SRC_SYNC_PATH=${SRC_SYNC_PATH:-to-be-continuous}
 DEST_SYNC_PATH=${DEST_SYNC_PATH:-to-be-continuous}
 MAX_VISIBILITY=${MAX_VISIBILITY:-public}
 GROUP_DESCRIPTION_DISABLED=${GROUP_DESCRIPTION_DISABLED:-none}
+PROJECT_DESCRIPTION_DISABLED=${PROJECT_DESCRIPTION_DISABLED:-none}
 
 # parse arguments
 POSITIONAL=()
@@ -352,6 +351,7 @@ case ${key} in
     log_info "  [--max-visibility {max visibility}]"
     log_info "  [--exclude {coma separated list of project/group path(s) to exclude}]"
     log_info "  [--no-group-description {do not synchronise group description}]"
+    log_info "  [--no-project-description {do not synchronise project description}]"
     exit 0
     ;;
     --sync-path)
@@ -394,6 +394,11 @@ case ${key} in
     shift # past argument
     shift # past value
     ;;
+    --no-project-description)
+    PROJECT_DESCRIPTION_DISABLED="true"
+    shift # past argument
+    shift # past value
+    ;;
     *)    # unknown option
     POSITIONAL+=("$1") # save it in an array for later
     shift # past argument
@@ -417,7 +422,8 @@ log_info "- from        (--src-api)        : \\e[33;1m${SRC_GITLAB_API}\\e[0m"
 log_info "- to          (--dest-api)       : \\e[33;1m${DEST_GITLAB_API:-none (dry run)}\\e[0m"
 log_info "- max visi.   (--max-visibility) : \\e[33;1m${MAX_VISIBILITY}\\e[0m"
 log_info "- exclude     (--exclude)        : \\e[33;1m${EXCLUDE:-none}\\e[0m"
-log_info "- no-group-description     (--no-group-description)        : \\e[33;1m${GROUP_DESCRIPTION_DISABLED:-none}\\e[0m"
+log_info "- disable group desc. sync   (--no-group-description)   : \\e[33;1m${GROUP_DESCRIPTION_DISABLED:-false}\\e[0m"
+log_info "- disable project desc. sync (--no-project-description) : \\e[33;1m${PROJECT_DESCRIPTION_DISABLED:-false}\\e[0m"
 
 init_git
 # shellcheck disable=SC2046

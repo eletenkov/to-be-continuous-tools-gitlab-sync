@@ -25,6 +25,7 @@ gitlab-sync.sh \
 | `--max-visibility` / `$MAX_VISIBILITY` | maximum visibility of projects in destination group | `public` |
 | `--exclude` / `$EXCLUDE`          | coma separated list of project/group path(s) to exclude | _none_ |
 | `--no-group-description` / `$GROUP_DESCRIPTION_DISABLED` | do not synchronise group description | _none_|
+| `--no-project-description` / `$PROJECT_DESCRIPTION_DISABLED` | do not synchronise project description | _none_|
 
 You shall use this script to copy the _to be continuous_ project to your own GitLab server for the first time with the following command:
 
