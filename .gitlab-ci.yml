@@ -40,7 +40,7 @@ sync-tbc:
     - apk add --no-cache git
     - install_ca_certs "${CUSTOM_CA_CERTS:-$DEFAULT_CA_CERTS}"
   script:
-    - ./gitlab-sync.sh
+    - bash ${CI_DEBUG_TRACE+-x} ./gitlab-sync.sh
   rules:
     # disable on gitlab.com
     - if: '$CI_SERVER_HOST == "gitlab.com"'
