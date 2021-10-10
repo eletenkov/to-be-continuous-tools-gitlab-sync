@@ -111,9 +111,11 @@ function sync_project() {
   local dest_parent_id=$2
   src_project_id=${src_project_full_path//\//%2f}
   local dest_group_full_path=$3
-  dest_project_full_path=${project_full_path/$SRC_SYNC_PATH/$DEST_SYNC_PATH}
+  dest_project_full_path=${src_project_full_path/$SRC_SYNC_PATH/$DEST_SYNC_PATH}
   dest_project_id=${dest_project_full_path//\//%2f}
-  log_info "Synchronizing project \\e[33;1m${src_project_full_path}\\e[0m (parent group ID \\e[33;1m${dest_parent_id}\\e[0m) to \\e[33;1m${dest_project_full_path}"
+  log_info "Synchronizing project \\e[33;1m${src_project_full_path}\\e[0m to \\e[33;1m${dest_project_full_path}\\e[0m (parent group ID \\e[33;1m${dest_parent_id:-none (dry run)}\\e[0m)"
+  # dump project json (for debug)
+  echo "$src_project_json" > "project-$src_project_id.json"
 
   # 1: sync project
   if [[ "$DEST_GITLAB_API" ]]
@@ -146,12 +148,12 @@ function sync_project() {
             \"visibility\": \"$dest_visibility\"
           }")
       else
-      dest_project_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X PUT "$DEST_GITLAB_API/projects/$dest_project_id" \
-        --data "{
-          \"name\": $(echo "$src_project_json" | jq .name), 
-          \"visibility\": \"$dest_visibility\", 
-          \"description\": $(echo "$src_project_json" | jq .description)
-        }")
+        dest_project_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X PUT "$DEST_GITLAB_API/projects/$dest_project_id" \
+          --data "{
+            \"name\": $(echo "$src_project_json" | jq .name), 
+            \"visibility\": \"$dest_visibility\", 
+            \"description\": $(echo "$src_project_json" | jq .description)
+          }")
       fi
         # \"visibility\": \"$(echo "$src_project_json" | jq -r .visibility)\",
       dest_latest_commit=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" "$DEST_GITLAB_API/projects/$dest_project_id/repository/commits?ref_name=master&per_page=1" | jq -r '.[0].id')
@@ -233,8 +235,10 @@ function sync_group() {
   local exclude=$3
   local dest_group_full_path=$4
   local dest_group_name=${dest_group_full_path//\//%2f}
-  log_info "Synchronizing group \\e[33;1m${src_group_full_path}\\e[0m (parent group ID \\e[33;1m${dest_parent_id}\\e[0m)"
+  log_info "Synchronizing group \\e[33;1m${src_group_full_path}\\e[0m (parent group ID \\e[33;1m${dest_parent_id:-none (dry run)}\\e[0m)"
   src_group_json=$(curl -sSf -H "${SRC_TOKEN+PRIVATE-TOKEN: $SRC_TOKEN}" "$SRC_GITLAB_API/groups/$src_group_id")
+  # dump group json (for debug)
+  echo "$src_group_json" > "group-$src_group_id.json"
 
   # 1: sync group itself
   if [[ "$DEST_GITLAB_API" ]]
@@ -245,7 +249,7 @@ function sync_group() {
     then
       # dest group does not exist: create
       log_info "... destination group not found: create with visibility \\e[33;1m${dest_visibility}\\e[0m"
-        dest_group_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X POST "$DEST_GITLAB_API/groups" \
+      dest_group_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X POST "$DEST_GITLAB_API/groups" \
         --data "{
           \"path\": $(echo "$src_group_json" | jq .path), 
           \"name\": $(echo "$src_group_json" | jq .name), 
@@ -311,15 +315,21 @@ function sync_group() {
   done
 
   # 3: sync sub-groups
-  src_subgroups_json=$(curl -sSf -H "${SRC_TOKEN+PRIVATE-TOKEN: $SRC_TOKEN}" "$SRC_GITLAB_API/groups/$group_id/subgroups")
-  for full_path in $(echo "$src_subgroups_json" | jq -r '.[].full_path')
+  src_subgroups_json=$(curl -sSf -H "${SRC_TOKEN+PRIVATE-TOKEN: $SRC_TOKEN}" "$SRC_GITLAB_API/groups/$src_group_id/subgroups")
+  # dump subgroups json (for debug)
+  echo "$src_subgroups_json" > "subgroups-$src_group_id.json"
+  for subgroup_full_path in $(echo "$src_subgroups_json" | jq -r '.[].full_path')
   do
-    group_rel_path=${full_path#$SRC_SYNC_PATH/}
-    if [[ ",$exclude," == *,$group_rel_path,* ]]
+    subgroup_rel_path=${subgroup_full_path#$SRC_SYNC_PATH/}
+    if [[ ",$exclude," == *,$subgroup_rel_path,* ]]
     then
-      log_info "Group \\e[33;1m${full_path}\\e[0m matches excludes (\\e[33;1m${exclude}\\e[0m): skip"
+      log_info "Group \\e[33;1m${subgroup_full_path}\\e[0m matches excludes (\\e[33;1m${exclude}\\e[0m): skip"
     else
-      sync_group "$full_path" "$dest_group_id" "$exclude"
+      local subgroup_id=${subgroup_full_path//\//%2f}
+      mkdir -p "$subgroup_id"
+      cd "$subgroup_id"
+      sync_group "$subgroup_full_path" "$dest_group_id" "$exclude"
+      cd ..
     fi
   done
 }
@@ -334,8 +344,6 @@ DEST_TOKEN=${DEST_TOKEN:-$GITLAB_TOKEN}
 SRC_SYNC_PATH=${SRC_SYNC_PATH:-to-be-continuous}
 DEST_SYNC_PATH=${DEST_SYNC_PATH:-to-be-continuous}
 MAX_VISIBILITY=${MAX_VISIBILITY:-public}
-GROUP_DESCRIPTION_DISABLED=${GROUP_DESCRIPTION_DISABLED:-none}
-PROJECT_DESCRIPTION_DISABLED=${PROJECT_DESCRIPTION_DISABLED:-none}
 
 # parse arguments
 POSITIONAL=()
@@ -345,7 +353,8 @@ key="$1"
 case ${key} in
     -h|--help)
     log_info "Usage: $0"
-    log_info "  --sync-path {GitLab root group path to synchronize}"
+    log_info "  --src-sync-path {GitLab source root group path to synchronize}"
+    log_info "  --dest-sync-path {GitLab destination root group path to synchronize}"
     log_info "  --src-api {GitLab source API url} [--src-token {GitLab source token}]"
     log_info "  --dest-api {GitLab destination API url} [--dest-token {GitLab destination token}]"
     log_info "  [--max-visibility {max visibility}]"
@@ -354,7 +363,7 @@ case ${key} in
     log_info "  [--no-project-description {do not synchronise project description}]"
     exit 0
     ;;
-    --sync-path)
+    --src-sync-path)
     SRC_SYNC_PATH="$2"
     shift # past argument
     shift # past value
@@ -366,6 +375,11 @@ case ${key} in
     ;;
     --src-token)
     SRC_TOKEN="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    --dest-sync-path)
+    DEST_SYNC_PATH="$2"
     shift # past argument
     shift # past value
     ;;
