@@ -328,7 +328,8 @@ function sync_group() {
       local subgroup_id=${subgroup_full_path//\//%2f}
       mkdir -p "$subgroup_id"
       cd "$subgroup_id"
-      sync_group "$subgroup_full_path" "$dest_group_id" "$exclude"
+      dest_subgroup_full_path=${subgroup_full_path/$SRC_SYNC_PATH/$DEST_SYNC_PATH}
+      sync_group "$subgroup_full_path" "$dest_group_id" "$exclude" "$dest_subgroup_full_path"
       cd ..
     fi
   done
