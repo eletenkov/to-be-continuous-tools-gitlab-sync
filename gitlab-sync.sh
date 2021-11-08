@@ -305,7 +305,7 @@ function sync_group() {
   do
     project_json=$(echo "$project_b64" | base64 -d)
     project_full_path=$(echo "$project_json" | jq -r '.path_with_namespace')
-    project_rel_path=${project_full_path#$SRC_SYNC_PATH/}
+    project_rel_path=${project_full_path#"$SRC_SYNC_PATH/"}
     if [[ ",$exclude," == *,$project_rel_path,* ]]
     then
       log_info "Project \\e[33;1m${project_full_path}\\e[0m matches excludes (\\e[33;1m${exclude}\\e[0m): skip"
@@ -320,7 +320,7 @@ function sync_group() {
   echo "$src_subgroups_json" > "subgroups-$src_group_id.json"
   for subgroup_full_path in $(echo "$src_subgroups_json" | jq -r '.[].full_path')
   do
-    subgroup_rel_path=${subgroup_full_path#$SRC_SYNC_PATH/}
+    subgroup_rel_path=${subgroup_full_path#"$SRC_SYNC_PATH/"}
     if [[ ",$exclude," == *,$subgroup_rel_path,* ]]
     then
       log_info "Group \\e[33;1m${subgroup_full_path}\\e[0m matches excludes (\\e[33;1m${exclude}\\e[0m): skip"
