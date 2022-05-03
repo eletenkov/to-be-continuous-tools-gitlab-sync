@@ -2,16 +2,16 @@
 # =========================================================================================
 # Copyright (C) 2021 Orange & contributors
 #
-# This program is free software; you can redistribute it and/or modify it under the terms 
-# of the GNU Lesser General Public License as published by the Free Software Foundation; 
+# This program is free software; you can redistribute it and/or modify it under the terms
+# of the GNU Lesser General Public License as published by the Free Software Foundation;
 # either version 3 of the License, or (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
 # without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 # See the GNU Lesser General Public License for more details.
 #
-# You should have received a copy of the GNU Lesser General Public License along with this 
-# program; if not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth 
+# You should have received a copy of the GNU Lesser General Public License along with this
+# program; if not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth
 # Floor, Boston, MA  02110-1301, USA.
 # =========================================================================================
 
@@ -71,7 +71,7 @@ function maybe_create_group() {
     echo "null"
   else
     group_id=${group_path//\//%2f}
-    group_status=$(curl -s -o /dev/null -I -w "%{http_code}" -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" "$DEST_GITLAB_API/groups/$group_id")
+    group_status=$(curl ${INSECURE+-k} -s -o /dev/null -I -w "%{http_code}" -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" "$DEST_GITLAB_API/groups/$group_id")
     if [[ "$group_status" == 404* ]]
     then
       # group does not exist: create
@@ -81,18 +81,18 @@ function maybe_create_group() {
       log_info "... group \\e[33;1m$group_path\\e[0m not found: create group \\e[33;1m$group_name\\e[0m with parent \\e[33;1m$parent_path\\e[0m"
       parent_id=$(maybe_create_group "$parent_path")
       # then create group
-      group_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X POST "$DEST_GITLAB_API/groups" \
+      group_json=$(curl ${INSECURE+-k} -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X POST "$DEST_GITLAB_API/groups" \
         --data "{
-          \"name\": \"$group_name\", 
-          \"path\": \"$group_name\", 
-          \"visibility\": \"$MAX_VISIBILITY\", 
+          \"name\": \"$group_name\",
+          \"path\": \"$group_name\",
+          \"visibility\": \"$MAX_VISIBILITY\",
           \"parent_id\": $parent_id
         }")
     elif [[ "$group_status" == 200* ]]
     then
       # group exists: retrieve ID
       log_info "... group \\e[33;1m$group_path\\e[0m found: retrieve ID"
-      group_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" "$DEST_GITLAB_API/groups/$group_id")
+      group_json=$(curl ${INSECURE+-k} -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" "$DEST_GITLAB_API/groups/$group_id")
     else
       # another error: abort
       fail "... unexpected error while getting group \\e[33;1m$group_path\\e[0m: $group_status"
@@ -122,17 +122,17 @@ function sync_project() {
   if [[ "$DEST_GITLAB_API" ]]
   then
     dest_visibility=$(adjust_visibility "$(echo "$src_project_json" | jq -r .visibility)")
-    dest_project_status=$(curl -s -o /dev/null -I -w "%{http_code}" -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" "$DEST_GITLAB_API/projects/$dest_project_id")
+    dest_project_status=$(curl ${INSECURE+-k} -s -o /dev/null -I -w "%{http_code}" -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" "$DEST_GITLAB_API/projects/$dest_project_id")
     if [[ "$dest_project_status" == 404* ]]
     then
       # dest project does not exist: create (disable MR and issues as they are cloned projects)
       log_info "... destination project not found: create with visibility \\e[33;1m${dest_visibility}\\e[0m"
-      dest_project_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X POST "$DEST_GITLAB_API/projects" \
+      dest_project_json=$(curl ${INSECURE+-k} -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X POST "$DEST_GITLAB_API/projects" \
         --data "{
-          \"path\": $(echo "$src_project_json" | jq .path), 
-          \"name\": $(echo "$src_project_json" | jq .name), 
-          \"visibility\": \"$dest_visibility\", 
-          \"description\": $(echo "$src_project_json" | jq .description), 
+          \"path\": $(echo "$src_project_json" | jq .path),
+          \"name\": $(echo "$src_project_json" | jq .name),
+          \"visibility\": \"$dest_visibility\",
+          \"description\": $(echo "$src_project_json" | jq .description),
           \"namespace_id\": $dest_parent_id,
           \"issues_access_level\": \"disabled\",
           \"merge_requests_access_level\": \"disabled\"
@@ -143,21 +143,21 @@ function sync_project() {
       log_info "... destination project found: synchronize"
       if [[ "${PROJECT_DESCRIPTION_DISABLED}" == "true" ]]
       then
-        dest_project_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X PUT "$DEST_GITLAB_API/projects/$dest_project_id" \
+        dest_project_json=$(curl ${INSECURE+-k} -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X PUT "$DEST_GITLAB_API/projects/$dest_project_id" \
           --data "{
-            \"name\": $(echo "$src_project_json" | jq .name), 
+            \"name\": $(echo "$src_project_json" | jq .name),
             \"visibility\": \"$dest_visibility\"
           }")
       else
-        dest_project_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X PUT "$DEST_GITLAB_API/projects/$dest_project_id" \
+        dest_project_json=$(curl ${INSECURE+-k} -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X PUT "$DEST_GITLAB_API/projects/$dest_project_id" \
           --data "{
-            \"name\": $(echo "$src_project_json" | jq .name), 
-            \"visibility\": \"$dest_visibility\", 
+            \"name\": $(echo "$src_project_json" | jq .name),
+            \"visibility\": \"$dest_visibility\",
             \"description\": $(echo "$src_project_json" | jq .description)
           }")
       fi
         # \"visibility\": \"$(echo "$src_project_json" | jq -r .visibility)\",
-      dest_latest_commit=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" "$DEST_GITLAB_API/projects/$dest_project_id/repository/commits?ref_name=$src_main_branch&per_page=1" | jq -r '.[0].id')
+      dest_latest_commit=$(curl ${INSECURE+-k} -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" "$DEST_GITLAB_API/projects/$dest_project_id/repository/commits?ref_name=$src_main_branch&per_page=1" | jq -r '.[0].id')
     else
       # another error: abort
       fail "... unexpected error: $dest_project_status"
@@ -171,8 +171,8 @@ function sync_project() {
     then
       log_info "... update avatar image ($src_avatar_url)"
       avatar_filename=/tmp/$(basename "$src_avatar_url")
-      curl -sSfL --output "$avatar_filename" "$src_avatar_url"
-      dest_project_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" --form "avatar=@$avatar_filename" -X PUT "$DEST_GITLAB_API/projects/$dest_project_id")
+      curl ${INSECURE+-k} -sSfL --output "$avatar_filename" "$src_avatar_url"
+      dest_project_json=$(curl ${INSECURE+-k} -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" --form "avatar=@$avatar_filename" -X PUT "$DEST_GITLAB_API/projects/$dest_project_id")
     fi
   fi
 
@@ -180,13 +180,13 @@ function sync_project() {
   if [[ "$dest_project_status" == 200* ]]
   then
     log_info "... unprotect $src_main_branch branch (allow failure)"
-    curl -sS -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -X DELETE "$DEST_GITLAB_API/projects/$dest_project_id/protected_branches/$src_main_branch" > /dev/null
+    curl ${INSECURE+-k} -sS -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -X DELETE "$DEST_GITLAB_API/projects/$dest_project_id/protected_branches/$src_main_branch" > /dev/null
   fi
 
   # 2: sync Git repository
   if [[ "$DEST_GITLAB_API" ]]
   then
-    src_latest_commit=$(curl -sSf -H "${SRC_TOKEN+PRIVATE-TOKEN: $SRC_TOKEN}" "$SRC_GITLAB_API/projects/$src_project_id/repository/commits?ref_name=$src_main_branch&per_page=1" | jq -r '.[0].id')
+    src_latest_commit=$(curl ${INSECURE+-k} -sSf -H "${SRC_TOKEN+PRIVATE-TOKEN: $SRC_TOKEN}" "$SRC_GITLAB_API/projects/$src_project_id/repository/commits?ref_name=$src_main_branch&per_page=1" | jq -r '.[0].id')
     if [[ "$src_latest_commit" == "$dest_latest_commit" ]]
     then
       log_info "... source and destination repositories are on same latest commit ($src_latest_commit): skip sync"
@@ -211,7 +211,7 @@ function sync_project() {
         # shellcheck disable=SC2001
         dest_repo_url=$(echo "$dest_repo_url" | sed -e "s|://|://token:${DEST_TOKEN}@|")
       fi
-      git push --force "$dest_repo_url" --tags "$src_main_branch"
+      git ${INSECURE+-c http.sslVerify=false} push --force "$dest_repo_url" --tags "$src_main_branch"
       cd ..
     fi
   fi
@@ -220,7 +220,7 @@ function sync_project() {
   if [[ "$dest_project_status" == 404* ]]
   then
     log_info "... unprotect $src_main_branch branch (allow failure)"
-    curl -sS -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -X DELETE "$DEST_GITLAB_API/projects/$dest_project_id/protected_branches/$src_main_branch" > /dev/null
+    curl ${INSECURE+-k} -sS -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -X DELETE "$DEST_GITLAB_API/projects/$dest_project_id/protected_branches/$src_main_branch" > /dev/null
   fi
 }
 
@@ -237,7 +237,7 @@ function sync_group() {
   local dest_group_full_path=$4
   local dest_group_name=${dest_group_full_path//\//%2f}
   log_info "Synchronizing group \\e[33;1m${src_group_full_path}\\e[0m (parent group ID \\e[33;1m${dest_parent_id:-none (dry run)}\\e[0m)"
-  src_group_json=$(curl -sSf -H "${SRC_TOKEN+PRIVATE-TOKEN: $SRC_TOKEN}" "$SRC_GITLAB_API/groups/$src_group_id")
+  src_group_json=$(curl ${INSECURE+-k} -sSf -H "${SRC_TOKEN+PRIVATE-TOKEN: $SRC_TOKEN}" "$SRC_GITLAB_API/groups/$src_group_id")
   # dump group json (for debug)
   echo "$src_group_json" > "group-$src_group_id.json"
 
@@ -245,17 +245,17 @@ function sync_group() {
   if [[ "$DEST_GITLAB_API" ]]
   then
     dest_visibility=$(adjust_visibility "$(echo "$src_group_json" | jq -r .visibility)")
-    dest_group_status=$(curl -s -o /dev/null -I -w "%{http_code}" -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" "$DEST_GITLAB_API/groups/$dest_group_name")
+    dest_group_status=$(curl ${INSECURE+-k} -s -o /dev/null -I -w "%{http_code}" -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" "$DEST_GITLAB_API/groups/$dest_group_name")
     if [[ "$dest_group_status" == 404* ]]
     then
       # dest group does not exist: create
       log_info "... destination group not found: create with visibility \\e[33;1m${dest_visibility}\\e[0m"
-      dest_group_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X POST "$DEST_GITLAB_API/groups" \
+      dest_group_json=$(curl ${INSECURE+-k} -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X POST "$DEST_GITLAB_API/groups" \
         --data "{
-          \"path\": $(echo "$src_group_json" | jq .path), 
-          \"name\": $(echo "$src_group_json" | jq .name), 
-          \"visibility\": \"$dest_visibility\", 
-          \"description\": $(echo "$src_group_json" | jq .description), 
+          \"path\": $(echo "$src_group_json" | jq .path),
+          \"name\": $(echo "$src_group_json" | jq .name),
+          \"visibility\": \"$dest_visibility\",
+          \"description\": $(echo "$src_group_json" | jq .description),
           \"parent_id\": $dest_parent_id
         }")
     elif [[ "$dest_group_status" == 200* ]]
@@ -264,18 +264,18 @@ function sync_group() {
       log_info "... destination group found: synchronize"
       if [[ "${GROUP_DESCRIPTION_DISABLED}" == "true" ]]
       then
-        dest_group_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X PUT "$DEST_GITLAB_API/groups/$dest_group_name" \
+        dest_group_json=$(curl ${INSECURE+-k} -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X PUT "$DEST_GITLAB_API/groups/$dest_group_name" \
           --data "{
-            \"name\": $(echo "$src_group_json" | jq .name), 
+            \"name\": $(echo "$src_group_json" | jq .name),
             \"visibility\": \"$dest_visibility\"
           }")
       else
-        dest_group_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X PUT "$DEST_GITLAB_API/groups/$dest_group_name" \
+        dest_group_json=$(curl ${INSECURE+-k} -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -H "Content-Type: application/json" -X PUT "$DEST_GITLAB_API/groups/$dest_group_name" \
           --data "{
-            \"name\": $(echo "$src_group_json" | jq .name), 
-            \"visibility\": \"$dest_visibility\", 
+            \"name\": $(echo "$src_group_json" | jq .name),
+            \"visibility\": \"$dest_visibility\",
             \"description\": $(echo "$src_group_json" | jq .description)
-          }")      
+          }")
       fi
     else
       # another error: abort
@@ -292,9 +292,9 @@ function sync_group() {
     then
       log_info "... update avatar image ($src_avatar_url)"
       avatar_filename=/tmp/$(basename "$src_avatar_url")
-      if curl -sSfL --output "$avatar_filename" "$src_avatar_url"
+      if curl ${INSECURE+-k} -sSfL --output "$avatar_filename" "$src_avatar_url"
       then
-        dest_group_json=$(curl -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" --form "avatar=@$avatar_filename" -X PUT "$DEST_GITLAB_API/groups/$dest_group_id")
+        dest_group_json=$(curl ${INSECURE+-k} -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" --form "avatar=@$avatar_filename" -X PUT "$DEST_GITLAB_API/groups/$dest_group_id")
       else
         log_warn "... failed downloading avatar image ($src_avatar_url)"
       fi
@@ -316,7 +316,7 @@ function sync_group() {
   done
 
   # 3: sync sub-groups
-  src_subgroups_json=$(curl -sSf -H "${SRC_TOKEN+PRIVATE-TOKEN: $SRC_TOKEN}" "$SRC_GITLAB_API/groups/$src_group_id/subgroups")
+  src_subgroups_json=$(curl ${INSECURE+-k} -sSf -H "${SRC_TOKEN+PRIVATE-TOKEN: $SRC_TOKEN}" "$SRC_GITLAB_API/groups/$src_group_id/subgroups")
   # dump subgroups json (for debug)
   echo "$src_subgroups_json" > "subgroups-$src_group_id.json"
   for subgroup_full_path in $(echo "$src_subgroups_json" | jq -r '.[].full_path')
@@ -359,6 +359,7 @@ case ${key} in
     log_info "  --dest-sync-path {GitLab destination root group path to synchronize}"
     log_info "  --src-api {GitLab source API url} [--src-token {GitLab source token}]"
     log_info "  --dest-api {GitLab destination API url} [--dest-token {GitLab destination token}]"
+    log_info "  [--insecure]"
     log_info "  [--max-visibility {max visibility}]"
     log_info "  [--exclude {coma separated list of project/group path(s) to exclude}]"
     log_info "  [--no-group-description {do not synchronise group description}]"
@@ -415,6 +416,10 @@ case ${key} in
     shift # past argument
     shift # past value
     ;;
+    --insecure)
+    INSECURE="true"
+    shift # past argument
+    ;;
     *)    # unknown option
     POSITIONAL+=("$1") # save it in an array for later
     shift # past argument
@@ -438,6 +443,7 @@ log_info "- from        (--src-api)        : \\e[33;1m${SRC_GITLAB_API}\\e[0m"
 log_info "- to          (--dest-api)       : \\e[33;1m${DEST_GITLAB_API:-none (dry run)}\\e[0m"
 log_info "- max visi.   (--max-visibility) : \\e[33;1m${MAX_VISIBILITY}\\e[0m"
 log_info "- exclude     (--exclude)        : \\e[33;1m${EXCLUDE:-none}\\e[0m"
+log_info "- insecure    (--insecure)       : \\e[33;1m${INSECURE:-false}\\e[0m"
 log_info "- disable group desc. sync   (--no-group-description)   : \\e[33;1m${GROUP_DESCRIPTION_DISABLED:-false}\\e[0m"
 log_info "- disable project desc. sync (--no-project-description) : \\e[33;1m${PROJECT_DESCRIPTION_DISABLED:-false}\\e[0m"
 
