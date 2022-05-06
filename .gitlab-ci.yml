@@ -1,6 +1,6 @@
 include:
  - project: 'to-be-continuous/bash'
-   ref: '2.0.1'
+   ref: '2.1.0'
    file: '/templates/gitlab-ci-bash.yml'
 
 variables:
