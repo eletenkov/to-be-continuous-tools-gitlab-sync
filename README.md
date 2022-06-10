@@ -8,28 +8,30 @@ It can be run manually (command line) and also as scheduled CI/CD job to regular
 
 ```bash
 gitlab-sync.sh \
-   --src-sync-path {GitLab source root group path to synchronize} \
-   --dest-sync-path {GitLab destination root group path to synchronize} \
-   --src-api {GitLab source API url} [--src-token {GitLab source token}] \
-   --dest-api {GitLab destination API url} [--dest-token {GitLab destination token}] \
+   [--src-api {GitLab source API url}] \
+   [--src-token {GitLab source token}] \
+   [--src-sync-path {GitLab source root group path to synchronize}] \
+   --dest-api {GitLab destination API url} \
+   --dest-token {GitLab destination token} \
+   [--dest-sync-path {GitLab destination root group path to synchronize}] \
    [--max-visibility {max visibility}] \
    [--exclude {coma separated list of project/group path(s) to exclude}] \
    [--no-group-description {do not synchronise group description}] \
    [--no-project-description {do not synchronise project description}]
 ```
 
-| CLI option / env. variable        | description                            | default value     |
-| --------------------------------- | -------------------------------------- | ----------------- |
-| `--src-sync-path` / `$SYNC_PATH`  | GitLab source root group path to synchronize  | `to-be-continuous` |
-| `--dest-sync-path` / `$SYNC_PATH`  | GitLab destination root group path to synchronize  | `to-be-continuous` |
-| `--src-api` / `$SRC_GITLAB_API`   | GitLab source API url                  | `https://gitlab.com/api/v4` |
-| `--src-token` / `$SRC_TOKEN`      | GitLab source token (_optional_ if source GitLab group and sub projects have `public` visibility) | _none_ |
-| `--dest-api` / `$DEST_GITLAB_API` | GitLab destination API url (**mandatory**) | `$CI_API_V4_URL` (defined when running in GitLab CI) |
-| `--dest-token` / `$DEST_TOKEN` or `$GITLAB_TOKEN` | GitLab destination token (**mandatory**) | _none_ |
-| `--max-visibility` / `$MAX_VISIBILITY` | maximum visibility of projects in destination group | `public` |
-| `--exclude` / `$EXCLUDE`          | coma separated list of project/group path(s) to exclude | _none_ |
-| `--no-group-description` / `$GROUP_DESCRIPTION_DISABLED` | do not synchronise group description | _none_|
-| `--no-project-description` / `$PROJECT_DESCRIPTION_DISABLED` | do not synchronise project description | _none_|
+| CLI option            | Env. Variable        | Description                            | Default Value     |
+| --------------------- | -------------------- | -------------------------------------- | ----------------- |
+| `--src-api`           | `$SRC_GITLAB_API`    | GitLab source API url                  | `https://gitlab.com/api/v4` |
+| `--src-token`         | `$SRC_TOKEN`         | GitLab source token (_optional_ if source GitLab group and sub projects have `public` visibility) | _none_ |
+| `--src-sync-path`     | `$SRC_SYNC_PATH`     | GitLab source root group path to synchronize  | `to-be-continuous` |
+| `--dest-api`          | `$DEST_GITLAB_API`   | GitLab destination API url (**mandatory**) | `$CI_API_V4_URL` (defined when running in GitLab CI) |
+| `--dest-token` | `$DEST_TOKEN` or `$GITLAB_TOKEN` | GitLab destination token (**mandatory**) | _none_ |
+| `--dest-sync-path`    | `$DEST_SYNC_PATH`    | GitLab destination root group path to synchronize  | `to-be-continuous` |
+| `--max-visibility`    | `$MAX_VISIBILITY`    | maximum visibility of projects in destination group | `public` |
+| `--exclude`           | `$EXCLUDE`           | coma separated list of project/group path(s) to exclude | _none_ |
+| `--no-group-description` | `$GROUP_DESCRIPTION_DISABLED` | do not synchronise group description | _none_|
+| `--no-project-description` | `$PROJECT_DESCRIPTION_DISABLED` | do not synchronise project description | _none_|
 
 You shall use this script to copy the _to be continuous_ project to your own GitLab server for the first time with the following command:
 
