@@ -45,4 +45,4 @@ curl -s https://gitlab.com/to-be-continuous/tools/gitlab-sync/-/raw/master/gitla
 
 Once copied _to be continuous_ to your GitLab server, you shall then schedule a pipeline in this project (`to-be-continuous/tools/gitlab-sync`) - for instance every night - to keep synchronized with source project.
 
-The script will only require a GitLab token, that shall be configured declaring a `$GITLAB_TOKEN` CI/CD project variable. (`--dest-api` will be implicitly retrieved using predefined `$CI_API_V4_URL`).
+The script will only require a GitLab token (with at least scopes `api,read_repository,write_repository` and `Owner` role), that shall be configured declaring a `$GITLAB_TOKEN` CI/CD project variable. (`--dest-api` will be implicitly retrieved using predefined `$CI_API_V4_URL`).
