@@ -4,6 +4,13 @@ This project provides a script able to recursively copy/synchronize a GitLab gro
 
 It can be run manually (command line) and also as scheduled CI/CD job to regularly synchronize a GitLab group mirror.
 
+## Pre-requisites
+
+The GitLab Synchronization Script has the following requirements:
+
+* Bash interpreter <br/>_Trivial on Linux or MacOS, tested with [Git Bash](https://www.atlassian.com/git/tutorials/git-bash) on Windows (available in [Git for Windows](https://gitforwindows.org/))_
+* [jq tool](https://stedolan.github.io/jq/download/) installed and accessible as `jq` command from the Bash interpreter
+
 ## Usage: script
 
 ```bash

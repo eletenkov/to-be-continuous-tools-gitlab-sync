@@ -302,9 +302,11 @@ function sync_group() {
   fi
 
   # 2: sync sub-projects
-  for project_b64 in $(echo "$src_group_json" | jq -r '.projects[] | @base64')
+  # shellcheck disable=SC2155
+  local projects_count=$(echo "$src_group_json" | jq '.projects | length')
+  for prj_idx in $(seq 0 $((projects_count-1)))
   do
-    project_json=$(echo "$project_b64" | base64 -d)
+    project_json=$(echo "$src_group_json" | jq -r ".projects[$prj_idx]")
     project_full_path=$(echo "$project_json" | jq -r '.path_with_namespace')
     project_rel_path=${project_full_path#"$SRC_SYNC_PATH/"}
     if [[ ",$exclude," == *,$project_rel_path,* ]]
@@ -319,8 +321,11 @@ function sync_group() {
   src_subgroups_json=$(curl ${INSECURE+-k} -sSf -H "${SRC_TOKEN+PRIVATE-TOKEN: $SRC_TOKEN}" "$SRC_GITLAB_API/groups/$src_group_id/subgroups")
   # dump subgroups json (for debug)
   echo "$src_subgroups_json" > "subgroups-$src_group_id.json"
-  for subgroup_full_path in $(echo "$src_subgroups_json" | jq -r '.[].full_path')
+  # shellcheck disable=SC2155
+  local subgroups_count=$(echo "$src_subgroups_json" | jq 'length')
+  for sub_idx in $(seq 0 $((subgroups_count-1)))
   do
+    subgroup_full_path=$(echo "$src_subgroups_json" | jq -r ".[$sub_idx].full_path")
     subgroup_rel_path=${subgroup_full_path#"$SRC_SYNC_PATH/"}
     if [[ ",$exclude," == *,$subgroup_rel_path,* ]]
     then
