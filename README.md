@@ -33,7 +33,7 @@ gitlab-sync.sh \
 | `--src-token`         | `$SRC_TOKEN`         | GitLab source token (_optional_ if source GitLab group and sub projects have `public` visibility) | _none_ |
 | `--src-sync-path`     | `$SRC_SYNC_PATH`     | GitLab source root group path to synchronize  | `to-be-continuous` |
 | `--dest-api`          | `$DEST_GITLAB_API`   | GitLab destination API url (**mandatory**) | `$CI_API_V4_URL` (defined when running in GitLab CI) |
-| `--dest-token` | `$DEST_TOKEN` or `$GITLAB_TOKEN` | GitLab destination token (**mandatory**) | _none_ |
+| `--dest-token` | `$DEST_TOKEN` or `$GITLAB_TOKEN` | GitLab destination token with at least scopes `api,read_repository,write_repository` and `Owner` role (**mandatory**) | _none_ |
 | `--dest-sync-path`    | `$DEST_SYNC_PATH`    | GitLab destination root group path to synchronize  | `to-be-continuous` |
 | `--max-visibility`    | `$MAX_VISIBILITY`    | maximum visibility of projects in destination group | `public` |
 | `--exclude`           | `$EXCLUDE`           | coma separated list of project/group path(s) to exclude | _none_ |
@@ -52,4 +52,4 @@ curl -s https://gitlab.com/to-be-continuous/tools/gitlab-sync/-/raw/master/gitla
 
 Once copied _to be continuous_ to your GitLab server, you shall then schedule a pipeline in this project (`to-be-continuous/tools/gitlab-sync`) - for instance every night - to keep synchronized with source project.
 
-The script will only require a GitLab token (with at least scopes `api,read_repository,write_repository` and `Owner` role), that shall be configured declaring a `$GITLAB_TOKEN` CI/CD project variable. (`--dest-api` will be implicitly retrieved using predefined `$CI_API_V4_URL`).
+The script will only require a GitLab token, that shall be configured declaring a `$GITLAB_TOKEN` CI/CD project variable. (`--dest-api` will be implicitly retrieved using predefined `$CI_API_V4_URL`).
