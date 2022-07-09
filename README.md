@@ -9,6 +9,7 @@ It can be run manually (command line) and also as scheduled CI/CD job to regular
 The GitLab Synchronization Script has the following requirements:
 
 * Bash interpreter <br/>_Trivial on Linux or MacOS, tested with [Git Bash](https://www.atlassian.com/git/tutorials/git-bash) on Windows (available in [Git for Windows](https://gitforwindows.org/))_
+* [curl tool](https://curl.se/) installed and accessible as `curl` command from the Bash interpreter
 * [jq tool](https://stedolan.github.io/jq/download/) installed and accessible as `jq` command from the Bash interpreter
 
 ## Usage: script
