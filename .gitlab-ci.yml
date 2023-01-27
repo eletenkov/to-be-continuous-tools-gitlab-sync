@@ -12,7 +12,7 @@ stages:
 
 sync-tbc:
   image:
-    name: "dwdraju/alpine-curl-jq:latest"
+    name: "registry.hub.docker.com/dwdraju/alpine-curl-jq:latest"
     entrypoint: [""]
   stage: build
   variables:
