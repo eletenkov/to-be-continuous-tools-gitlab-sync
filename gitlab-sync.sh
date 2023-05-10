@@ -108,7 +108,7 @@ function maybe_create_group() {
 function sync_project() {
   local src_project_json=$1
   src_project_full_path=$(echo "$src_project_json" | jq -r '.path_with_namespace')
-  src_main_branch=$(echo "$src_project_json" | jq -r '.default_branch')
+  src_default_branch=$(echo "$src_project_json" | jq -r '.default_branch')
   local dest_parent_id=$2
   src_project_id=${src_project_full_path//\//%2f}
   local dest_group_full_path=$3
@@ -157,7 +157,7 @@ function sync_project() {
           }")
       fi
         # \"visibility\": \"$(echo "$src_project_json" | jq -r .visibility)\",
-      dest_latest_commit=$(curl ${INSECURE+-k} -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" "$DEST_GITLAB_API/projects/$dest_project_id/repository/commits?ref_name=$src_main_branch&per_page=1" | jq -r '.[0].id')
+      dest_latest_commit=$(curl ${INSECURE+-k} -sSf -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" "$DEST_GITLAB_API/projects/$dest_project_id/repository/commits?ref_name=$src_default_branch&per_page=1" | jq -r '.[0].id')
     else
       # another error: abort
       fail "... unexpected error: $dest_project_status"
@@ -176,26 +176,21 @@ function sync_project() {
     fi
   fi
 
-  # if project already exists: unprotect master branch first
-  if [[ "$dest_project_status" == 200* ]]
-  then
-    log_info "... unprotect $src_main_branch branch (allow failure)"
-    curl ${INSECURE+-k} -sS -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -X DELETE "$DEST_GITLAB_API/projects/$dest_project_id/protected_branches/$src_main_branch" > /dev/null
-  fi
-
   # 2: sync Git repository
   if [[ "$DEST_GITLAB_API" ]]
   then
-    src_latest_commit=$(curl ${INSECURE+-k} -sSf -H "${SRC_TOKEN+PRIVATE-TOKEN: $SRC_TOKEN}" "$SRC_GITLAB_API/projects/$src_project_id/repository/commits?ref_name=$src_main_branch&per_page=1" | jq -r '.[0].id')
+    src_latest_commit=$(curl ${INSECURE+-k} -sSf -H "${SRC_TOKEN+PRIVATE-TOKEN: $SRC_TOKEN}" "$SRC_GITLAB_API/projects/$src_project_id/repository/commits?ref_name=$src_default_branch&per_page=1" | jq -r '.[0].id')
     if [[ "$src_latest_commit" == "$dest_latest_commit" ]]
     then
-      log_info "... source and destination repositories are on same latest commit ($src_latest_commit): skip sync"
+      # Git sync is not required: skip
+      log_info "... source and destination repositories are on same latest commit ($src_latest_commit): skip Git sync"
     else
+      # Git sync is required
       repo_name="$src_project_id"
       rm -rf "$repo_name"
 
       src_repo_url=$(echo "$src_project_json" | jq -r .http_url_to_repo)
-      log_info "... cloning source repository ($src_repo_url)"
+      log_info "... git clone source repository ($src_repo_url)"
       if [[ "$SRC_TOKEN" ]]; then
         # insert login/password in Git https url
         # shellcheck disable=SC2001
@@ -203,24 +198,28 @@ function sync_project() {
       fi
       git clone --bare "$src_repo_url" "$repo_name"
 
+      # if project already exists: unprotect default branch first
+      if [[ "$dest_project_status" == 200* ]]
+      then
+        log_info "... unprotect $src_default_branch branch (allow failure)"
+        curl ${INSECURE+-k} -sS -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -X DELETE "$DEST_GITLAB_API/projects/$dest_project_id/protected_branches/$src_default_branch" > /dev/null
+      fi
+ 
       cd "$repo_name"
       dest_repo_url=$(echo "$dest_project_json" | jq -r .http_url_to_repo)
-      log_info "... sync (force) destination repository ($dest_repo_url)"
+      log_info "... git push (force) destination repository ($dest_repo_url)"
       if [[ "$DEST_TOKEN" ]]; then
         # insert login/password in Git https url
         # shellcheck disable=SC2001
         dest_repo_url=$(echo "$dest_repo_url" | sed -e "s|://|://token:${DEST_TOKEN}@|")
       fi
-      git ${INSECURE+-c http.sslVerify=false} push --force "$dest_repo_url" --tags "$src_main_branch"
+      git ${INSECURE+-c http.sslVerify=false} push --force "$dest_repo_url" --tags "$src_default_branch"
       cd ..
-    fi
-  fi
 
-  # if project didn't exist: unprotect master branch
-  if [[ "$dest_project_status" == 404* ]]
-  then
-    log_info "... unprotect $src_main_branch branch (allow failure)"
-    curl ${INSECURE+-k} -sS -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -X DELETE "$DEST_GITLAB_API/projects/$dest_project_id/protected_branches/$src_main_branch" > /dev/null
+      # after sync: protect default branch again
+      log_info "... protect $src_default_branch branch"
+      curl ${INSECURE+-k} -sS -H "${DEST_TOKEN+PRIVATE-TOKEN: $DEST_TOKEN}" -X POST "$DEST_GITLAB_API/projects/$dest_project_id/protected_branches?name=$src_default_branch" > /dev/null
+    fi
   fi
 }
 
