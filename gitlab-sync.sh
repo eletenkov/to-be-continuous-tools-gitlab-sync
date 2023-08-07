@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 # =========================================================================================
 # Copyright (C) 2021 Orange & contributors
 #
@@ -352,7 +352,7 @@ DEST_SYNC_PATH=${DEST_SYNC_PATH:-to-be-continuous}
 MAX_VISIBILITY=${MAX_VISIBILITY:-public}
 
 # parse arguments
-POSITIONAL=()
+POSITIONAL=""
 while [[ $# -gt 0 ]]
 do
 key="$1"
@@ -425,13 +425,13 @@ case ${key} in
     shift # past argument
     ;;
     *)    # unknown option
-    POSITIONAL+=("$1") # save it in an array for later
+    POSITIONAL="$POSITIONAL $1" # save it in an array for later
     shift # past argument
     ;;
 esac
 done
 
-set -- "${POSITIONAL[@]}" # restore positional parameters
+# set -- "${POSITIONAL[@]}" # restore positional parameters
 
 assert_defined "$SRC_GITLAB_API" "GitLab source API url has to be defined ('--src-api' option)"
 

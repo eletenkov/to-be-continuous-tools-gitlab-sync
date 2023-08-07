@@ -12,7 +12,7 @@ stages:
 
 sync-tbc:
   image:
-    name: "registry.hub.docker.com/dwdraju/alpine-curl-jq:latest"
+    name: "registry.hub.docker.com/badouralix/curl-jq:latest"
     entrypoint: [""]
   stage: build
   variables:
@@ -40,7 +40,7 @@ sync-tbc:
     - apk add --no-cache git
     - install_ca_certs "${CUSTOM_CA_CERTS:-$DEFAULT_CA_CERTS}"
   script:
-    - bash ${CI_DEBUG_TRACE+-x} ./gitlab-sync.sh
+    - sh ${CI_DEBUG_TRACE+-x} ./gitlab-sync.sh
   rules:
     # disable on gitlab.com
     - if: '$CI_SERVER_HOST == "gitlab.com"'
@@ -49,3 +49,12 @@ sync-tbc:
     - if: '$CI_PIPELINE_SOURCE == "web"'
     # allow scheduled source
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
+
+sync-tbc-dryrun:
+  extends: sync-tbc
+  script:
+    # unset dest GitLab (dryrun)
+    - sh ${CI_DEBUG_TRACE+-x} ./gitlab-sync.sh --dest-api ""
+  rules:
+    # run only on gitlab.com (to test at least the script correctly crawls tbc projects)
+    - if: '$CI_SERVER_HOST == "gitlab.com"'
